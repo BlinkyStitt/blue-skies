@@ -15,9 +15,10 @@ The first pass scanned 15,730 visible assets in the Photos library. Local Photos
 derivatives were used for fast image scoring; five iCloud-only candidates were fetched
 as previews and reviewed separately. Candidates favored sky classifications, broad
 color fields, low edge density, and low luminance variation. Human contact-sheet review
-then removed landscapes, buildings, utility lines, trees, and near-black frames.
+then removed landscapes, buildings, utility lines, trees, near-black frames, aircraft,
+and ambiguous airborne silhouettes.
 
-The repository contains the resulting 105-photo selection:
+The repository contains the resulting 101-photo selection:
 
 - `selection.csv` is the authoritative asset manifest and retains creation date,
   original filename, UUID, camera metadata, and the scan metrics.
@@ -150,22 +151,22 @@ For every source, the renderer builds a descriptor from:
 
 It computes all pairwise descriptor distances, evaluates nearest-neighbor cyclic tours
 from every starting asset, and applies strictly decreasing 2-opt improvements. The cycle
-is rotated back to the first manifest asset so output is deterministic. The production
-tour reduced total perceptual cycle distance from `82.473841949176` to
-`22.620442290921`, a 72.57% reduction compared with chronological order.
+is rotated back to the first manifest asset so output is deterministic. The current
+production tour reduced total perceptual cycle distance from `77.638227793557` to
+`20.909465714808`, a 73.07% reduction compared with chronological order.
 
 ### Assign transition durations
 
 Perceptual distances are mapped between their 10th and 90th percentiles. Quintic
-smootherstep easing then assigns each edge between 0.45 and 1.05 seconds:
+smootherstep is used only to assign each segment between 0.45 and 1.05 seconds:
 
 ```text
 smootherstep(t) = 6t^5 - 15t^4 + 10t^3
 ```
 
-This easing has zero first and second derivatives at both endpoints, so a frame arrives
-and departs without an abrupt velocity change. Similar skies pass quickly; larger color
-or texture changes receive more time.
+Similar skies pass quickly; larger color or texture changes receive more time. Within a
+segment, the spline parameter advances linearly. There is deliberately no per-photo
+temporal easing, endpoint hold, or arrival phase.
 
 ### Interpolate color and detail separately
 
@@ -175,10 +176,25 @@ Each full-resolution frame is decomposed into three spatial bands:
 2. a mid-frequency band between 1/4 and 1/16 resolution; and
 3. the remaining high-frequency detail.
 
-The base fields interpolate continuously in OKLab with smootherstep timing. Mid-frequency
-detail gets a small overlap, while high-frequency detail from the first photograph fades
-fully away before detail from the second fades in. This avoids double-exposed birds,
-contrails, moons, and cloud edges while keeping broad gradients continuous.
+Every segment is evaluated from four cyclically adjacent photographs with periodic
+uniform cubic B-spline weights:
+
+```text
+w0 = (1-t)^3 / 6
+w1 = (3t^3 - 6t^2 + 4) / 6
+w2 = (-3t^3 + 3t^2 + 3t + 1) / 6
+w3 = t^3 / 6
+```
+
+The low-frequency fields use those weights directly in OKLab. Mid-frequency weights are
+squared and renormalized; fine-detail weights are cubed and renormalized. This keeps
+texture concentrated around the central skies without sacrificing the spline's seamless
+cyclic continuity.
+
+Unlike an eased pairwise dissolve, the periodic spline is `C2` continuous and has a
+nonzero tangent as it passes every source knot. It never stops to present a photograph as
+a static endpoint; the result is one continuously swirling trajectory through the whole
+selection.
 
 The linear-light result is encoded with the BT.709 transfer function. A deterministic,
 Fourier-shaped high-frequency dither is shifted each frame at approximately one 10-bit
@@ -225,13 +241,13 @@ Then render the final loop:
 uv run blue-skies render \
   --manifest selection.csv \
   --source-dir sources \
-  --output-dir output/final \
+  --output-dir output/swirl-final \
   --size 1080 \
   --fps 60
 ```
 
-The delivered render contains 4,075 frames, runs for 67.916667 seconds, and includes all
-105 selected photographs plus the final transition back to the first photograph.
+The delivered render contains 4,138 frames, runs for 68.966667 seconds, and continuously
+circulates through all 101 selected photographs.
 
 ## 6. Final verification
 
@@ -242,7 +258,7 @@ ffprobe -v error -select_streams v:0 \
   -show_entries \
 stream=codec_name,width,height,pix_fmt,color_space,color_transfer,color_primaries,avg_frame_rate,nb_frames:format=duration,size \
   -of default=noprint_wrappers=1 \
-  output/final/blue-skies-smooth-10bit.mp4
+  output/swirl-final/blue-skies-smooth-10bit.mp4
 ```
 
 Expected master properties:
@@ -256,18 +272,19 @@ color_space=bt709
 color_transfer=bt709
 color_primaries=bt709
 avg_frame_rate=60/1
-nb_frames=4075
-duration=67.916667
+nb_frames=4138
+duration=68.966667
 ```
 
-The production run also compared its first and last rendered frames and measured
-45.99 dB PSNR, confirming that the media-loop boundary is visually close. Finally,
+The current production run compared its first and last compatibility frames and measured
+45.58 dB PSNR. A low-resolution motion audit found nonzero movement through every one of
+the 100 internal knots, with a median boundary-to-local-motion ratio of 1.000. Finally,
 verify copied deliverables with SHA-256 rather than relying on filenames or timestamps.
 
 ## 7. Delivery and repository policy
 
-The finished files are copied to `/Users/bryan/Pictures/Sky Fade/` with the
-`blue-skies-*` prefix. Previous experimental renders remain intact.
+The current files are copied to `/Users/bryan/Pictures/Sky Fade/` with the
+`blue-skies-swirl-*` prefix. Previous experimental renders remain intact.
 
 `sources/`, `output/`, export databases, and export reports are generated scratch data
 and remain ignored. Commit code, tests, lockfile, the curated manifests, and workflow

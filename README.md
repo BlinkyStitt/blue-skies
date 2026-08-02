@@ -5,8 +5,8 @@ Builds a seamless sky-photo loop using a deterministic photographic pipeline:
 1. export the selected full-resolution originals from Photos with `osxphotos`;
 2. find a short cyclic tour through a perceptual OKLab/spatial-texture descriptor;
 3. assign more time to perceptually difficult transitions;
-4. interpolate low-frequency color fields in OKLab;
-5. dissolve mid- and high-frequency detail independently with quintic easing;
+4. move continuously through four neighboring skies with a periodic cubic B-spline;
+5. interpolate low-frequency color in OKLab and sharpen the spline weights for detail;
 6. add deterministic high-frequency dither and encode 10-bit HEVC plus H.264.
 
 The renderer does not synthesize objects or invent cloud motion. It is deliberately

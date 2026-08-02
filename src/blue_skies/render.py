@@ -51,32 +51,57 @@ def prepare_frame(source: Source, size: int) -> PreparedFrame:
     )
 
 
-def _band_weights(position: float, *, overlap: float) -> tuple[float, float]:
-    if overlap <= 0.0:
-        if position <= 0.5:
-            return 1.0 - float(smootherstep(position * 2.0)), 0.0
-        return 0.0, float(smootherstep((position - 0.5) * 2.0))
+def spline_weights(position: float) -> tuple[float, float, float, float]:
+    """Periodic uniform cubic B-spline weights for four adjacent control frames."""
+    position = min(1.0, max(0.0, position))
+    inverse = 1.0 - position
+    return (
+        inverse**3 / 6.0,
+        (3.0 * position**3 - 6.0 * position**2 + 4.0) / 6.0,
+        (-3.0 * position**3 + 3.0 * position**2 + 3.0 * position + 1.0) / 6.0,
+        position**3 / 6.0,
+    )
 
-    fade_out_end = 0.5 + overlap / 2.0
-    fade_in_start = 0.5 - overlap / 2.0
-    left = 1.0 - float(smootherstep(position / fade_out_end))
-    right = float(smootherstep((position - fade_in_start) / (1.0 - fade_in_start)))
-    return left, right
+
+def _sharpen_weights(
+    weights: tuple[float, float, float, float], power: int
+) -> tuple[float, float, float, float]:
+    powered = tuple(weight**power for weight in weights)
+    total = sum(powered)
+    return (
+        powered[0] / total,
+        powered[1] / total,
+        powered[2] / total,
+        powered[3] / total,
+    )
 
 
-def interpolate(first: PreparedFrame, second: PreparedFrame, position: float) -> FloatImage:
-    eased = float(smootherstep(position))
-    base_lab = first.base_lab * (1.0 - eased) + second.base_lab * eased
+def interpolate(
+    controls: tuple[PreparedFrame, PreparedFrame, PreparedFrame, PreparedFrame],
+    position: float,
+) -> FloatImage:
+    """Blend a continuously moving four-frame segment without stopping at a source."""
+    base_weights = spline_weights(position)
+    mid_weights = _sharpen_weights(base_weights, 2)
+    fine_weights = _sharpen_weights(base_weights, 3)
+
+    base_lab = (
+        controls[0].base_lab * base_weights[0]
+        + controls[1].base_lab * base_weights[1]
+        + controls[2].base_lab * base_weights[2]
+        + controls[3].base_lab * base_weights[3]
+    )
     base = oklab_to_linear_rgb(base_lab)
-
-    mid_left, mid_right = _band_weights(position, overlap=0.18)
-    fine_left, fine_right = _band_weights(position, overlap=0.0)
     image = (
         base
-        + first.mid * mid_left
-        + second.mid * mid_right
-        + first.fine * fine_left
-        + second.fine * fine_right
+        + controls[0].mid * mid_weights[0]
+        + controls[1].mid * mid_weights[1]
+        + controls[2].mid * mid_weights[2]
+        + controls[3].mid * mid_weights[3]
+        + controls[0].fine * fine_weights[0]
+        + controls[1].fine * fine_weights[1]
+        + controls[2].fine * fine_weights[2]
+        + controls[3].fine * fine_weights[3]
     )
     return np.clip(image, 0.0, 1.0)
 
@@ -194,21 +219,34 @@ def _write_frames(
     frame_counts: tuple[int, ...],
     settings: RenderSettings,
 ) -> int:
+    if len(ordered_sources) < 4:
+        raise ValueError("Continuous spline rendering requires at least four sources")
+
     noise = _blue_noise()
     frame_number = 0
-    first = prepare_frame(ordered_sources[0], settings.size)
     pair_count = settings.preview_pairs or len(ordered_sources)
+    controls = (
+        prepare_frame(ordered_sources[-1], settings.size),
+        prepare_frame(ordered_sources[0], settings.size),
+        prepare_frame(ordered_sources[1], settings.size),
+        prepare_frame(ordered_sources[2], settings.size),
+    )
 
     for pair_index in range(pair_count):
-        next_index = (pair_index + 1) % len(ordered_sources)
-        second = prepare_frame(ordered_sources[next_index], settings.size)
         count = frame_counts[pair_index]
         for local_frame in range(count):
             position = local_frame / count
-            image = interpolate(first, second, position)
+            image = interpolate(controls, position)
             stream.write(_to_rgb48_bytes(image, noise, frame_number))
             frame_number += 1
-        first = second
+        if pair_index + 1 < pair_count:
+            incoming_index = (pair_index + 3) % len(ordered_sources)
+            controls = (
+                controls[1],
+                controls[2],
+                controls[3],
+                prepare_frame(ordered_sources[incoming_index], settings.size),
+            )
     return frame_number
 
 
