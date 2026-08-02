@@ -12,6 +12,10 @@ Builds a seamless sky-photo loop using a deterministic photographic pipeline:
 The renderer does not synthesize objects or invent cloud motion. It is deliberately
 faithful to the selected photographs.
 
+See [the production workflow](docs/WORKFLOW.md) for selection provenance, the
+resumable `osxphotos export` process, interpolation details, preview review, and
+final validation. Repository agents must also follow `AGENTS.md`.
+
 ## Requirements
 
 - macOS Photos, for original export
