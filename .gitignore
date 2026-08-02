@@ -1,0 +1,10 @@
+.DS_Store
+.python-version
+.venv/
+__pycache__/
+*.pyc
+output/
+sources/
+source-test/
+export.csv
+source-test-report.csv
