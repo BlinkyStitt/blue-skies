@@ -46,6 +46,10 @@ uv run blue-skies render \
   --output-dir output \
   --size 1080 \
   --fps 60
+
+uv run blue-skies farcaster-gif \
+  --source output/blue-skies-smooth.mp4 \
+  --destination output/blue-skies-farcaster.gif
 ```
 
 Use `--preview-pairs 12 --size 480 --fps 30` for a fast representative render.
@@ -60,3 +64,8 @@ genuine original. Treat any nonzero `missing` or `error` value in `export.csv`
 as a source-quality failure. `osxphotos` documents limited testing on newer
 macOS releases, so the command above was first verified with a one-photo export
 before this set was exported.
+
+The normal render keeps the full-quality video and archival GIF outputs. The additional
+Farcaster command preserves the full loop at 15 source fps with a 128-color ordered-dither
+palette, then binary-searches for the largest even square dimension whose encoded file is
+no more than 5,000,000 bytes.

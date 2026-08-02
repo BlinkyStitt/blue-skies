@@ -9,6 +9,7 @@ from pathlib import Path
 from .media import load_sources, write_contact_sheet
 from .ordering import build_tour, cycle_length, pairwise_distances
 from .render import RenderSettings, render_video, write_order_manifest
+from .social_gif import SocialGifSettings, make_social_gif
 
 
 def _make_gif(source: Path, destination: Path) -> None:
@@ -75,6 +76,29 @@ def render(arguments: argparse.Namespace) -> None:
         _make_gif(output_dir / "blue-skies-smooth.mp4", output_dir / "blue-skies-smooth.gif")
 
 
+def farcaster_gif(arguments: argparse.Namespace) -> None:
+    settings = SocialGifSettings(
+        max_bytes=arguments.max_bytes,
+        fps=arguments.fps,
+        colors=arguments.colors,
+        min_dimension=arguments.min_dimension,
+        max_dimension=arguments.max_dimension,
+    )
+    result = make_social_gif(arguments.source, arguments.destination, settings)
+    print(
+        json.dumps(
+            {
+                "destination": str(result.destination),
+                "dimension": result.dimension,
+                "size_bytes": result.size_bytes,
+                "fps": result.fps,
+                "colors": result.colors,
+            },
+            indent=2,
+        )
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Render smooth sky-photo transitions")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -89,6 +113,19 @@ def main() -> None:
     render_parser.add_argument("--preview-pairs", type=int)
     render_parser.add_argument("--no-gif", action="store_true")
     render_parser.set_defaults(handler=render)
+
+    farcaster_parser = subparsers.add_parser(
+        "farcaster-gif",
+        help="build the largest high-quality square GIF under a byte ceiling",
+    )
+    farcaster_parser.add_argument("--source", type=Path, required=True)
+    farcaster_parser.add_argument("--destination", type=Path, required=True)
+    farcaster_parser.add_argument("--max-bytes", type=int, default=5_000_000)
+    farcaster_parser.add_argument("--fps", type=int, default=15)
+    farcaster_parser.add_argument("--colors", type=int, default=128)
+    farcaster_parser.add_argument("--min-dimension", type=int, default=96)
+    farcaster_parser.add_argument("--max-dimension", type=int, default=480)
+    farcaster_parser.set_defaults(handler=farcaster_gif)
     arguments = parser.parse_args()
 
     for executable in ("ffmpeg", "ffprobe"):

@@ -213,6 +213,30 @@ The 10-bit HEVC file is the quality master. The H.264 file is the compatibility 
 GIF is only a portable preview because its palette cannot faithfully preserve all sky
 gradients.
 
+### Build the size-bounded Farcaster GIF
+
+This is an additional delivery derivative. Keep the full 10-bit master, H.264 copy, and
+480×480/25 fps archival GIF from the normal render. Do not reuse a fixed small-GIF
+dimension as the selection grows: duration and image content both affect compression.
+Run the bounded encoder after every new final render:
+
+```bash
+uv run blue-skies farcaster-gif \
+  --source output/swirl-final/blue-skies-smooth.mp4 \
+  --destination "/Users/bryan/Pictures/Sky Fade/blue-skies-swirl-farcaster.gif"
+```
+
+The defaults preserve the full loop at 15 source fps and use a 128-color global palette,
+Lanczos scaling, and ordered Bayer dithering at scale 5. Ordered dithering is much more
+compressible than the archival GIF's Sierra error diffusion while retaining smooth sky
+gradients. The command binary-searches even dimensions from 96 through 480, writes only
+the largest result at or below the strict 5,000,000-byte ceiling, and atomically replaces
+the destination.
+
+For the 101-photo, 69-second production loop, the selected result was 226×226 with 1,035
+frames and a size of 4,968,728 bytes. Adding photos may select a smaller dimension; that
+is expected and is why the byte-bounded command is authoritative.
+
 ## 5. Preview, inspect, then render
 
 Always render a bounded preview first:
