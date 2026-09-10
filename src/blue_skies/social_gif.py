@@ -63,40 +63,21 @@ def find_largest_fitting_dimension(
     scratch_dir: Path,
     settings: SocialGifSettings,
 ) -> GifCandidate:
-    """Binary-search the largest dimension whose encoded GIF fits the byte ceiling."""
+    """Check dimensions in descending order and return the first GIF that fits."""
     dimensions = _dimensions(settings)
-    low = 0
-    high = len(dimensions) - 1
-    best: GifCandidate | None = None
 
-    while low <= high:
-        middle = (low + high) // 2
-        dimension = dimensions[middle]
+    # GIF size is not monotonic: an oversized result cannot rule out larger sizes.
+    for dimension in reversed(dimensions):
         path = scratch_dir / f"candidate-{dimension}.gif"
         size_bytes = encode(dimension, path)
-        candidate = GifCandidate(dimension=dimension, size_bytes=size_bytes, path=path)
         print(f"{dimension}x{dimension}: {size_bytes:,} bytes")
         if size_bytes <= settings.max_bytes:
-            best = candidate
-            low = middle + 1
-        else:
-            high = middle - 1
+            return GifCandidate(dimension=dimension, size_bytes=size_bytes, path=path)
+        path.unlink(missing_ok=True)
 
-    if best is None:
-        raise RuntimeError(
-            f"Even {dimensions[0]}x{dimensions[0]} exceeds {settings.max_bytes:,} bytes"
-        )
-    return best
-
-
-def _filter_graph(dimension: int, settings: SocialGifSettings) -> str:
-    return (
-        f"fps={settings.fps},"
-        f"scale={dimension}:{dimension}:flags=lanczos,"
-        "split[a][b];"
-        f"[a]palettegen=max_colors={settings.colors}:stats_mode=full[p];"
-        f"[b][p]paletteuse=dither=bayer:bayer_scale={settings.bayer_scale}:"
-        "diff_mode=rectangle"
+    raise RuntimeError(
+        f"No dimension from {dimensions[0]} to {dimensions[-1]} "
+        f"fits within {settings.max_bytes:,} bytes"
     )
 
 
@@ -106,23 +87,42 @@ def _encode_candidate(
     dimension: int,
     settings: SocialGifSettings,
 ) -> int:
-    subprocess.run(
-        [
-            "ffmpeg",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-i",
-            str(source),
-            "-vf",
-            _filter_graph(dimension, settings),
-            "-loop",
-            "0",
-            "-y",
-            str(destination),
-        ],
-        check=True,
-    )
+    frame_filter = f"fps={settings.fps},scale={dimension}:{dimension}:flags=lanczos"
+    input_command = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", str(source)]
+    # Finish the global palette before decoding again, so frames never queue
+    # behind palette generation for the full duration of the source loop.
+    with tempfile.TemporaryDirectory(prefix="palette-", dir=destination.parent) as temporary:
+        palette = Path(temporary) / "palette.png"
+        subprocess.run(
+            [
+                *input_command,
+                "-vf",
+                f"{frame_filter},palettegen=max_colors={settings.colors}:stats_mode=full",
+                "-frames:v",
+                "1",
+                "-update",
+                "1",
+                "-y",
+                str(palette),
+            ],
+            check=True,
+        )
+        subprocess.run(
+            [
+                *input_command,
+                "-i",
+                str(palette),
+                "-filter_complex",
+                f"[0:v]{frame_filter}[frames];"
+                f"[frames][1:v]paletteuse=dither=bayer:bayer_scale={settings.bayer_scale}:"
+                "diff_mode=rectangle",
+                "-loop",
+                "0",
+                "-y",
+                str(destination),
+            ],
+            check=True,
+        )
     return destination.stat().st_size
 
 
@@ -135,6 +135,8 @@ def make_social_gif(
     destination = destination.resolve()
     if not source.is_file():
         raise FileNotFoundError(f"Source video not found: {source}")
+    if source == destination:
+        raise ValueError("Destination must not resolve to the source video")
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="blue-skies-farcaster-") as temporary:

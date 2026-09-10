@@ -229,9 +229,17 @@ uv run blue-skies farcaster-gif \
 The defaults preserve the full loop at 15 source fps and use a 128-color global palette,
 Lanczos scaling, and ordered Bayer dithering at scale 5. Ordered dithering is much more
 compressible than the archival GIF's Sierra error diffusion while retaining smooth sky
-gradients. The command binary-searches even dimensions from 96 through 480, writes only
-the largest result at or below the strict 5,000,000-byte ceiling, and atomically replaces
-the destination.
+gradients. The command checks even dimensions from 480 down through 96 and stops at the
+first result at or below the strict 5,000,000-byte ceiling. GIF size can decrease at a
+larger dimension, so every larger candidate must be checked to guarantee the largest
+fit. This can require more encodes than a binary search. The command deletes rejected
+candidates and atomically replaces the destination with the winner. It rejects a
+destination that resolves to the source video, including through a symbolic link.
+
+Each candidate uses two FFmpeg passes: one generates the global palette, then another
+decodes the source again and applies that palette. This avoids buffering the complete
+scaled loop in memory. Both passes use the same frame rate and scaling settings, and
+the temporary palette is removed after encoding.
 
 For the 101-photo, 69-second production loop, the selected result was 226×226 with 1,035
 frames and a size of 4,968,728 bytes. Adding photos may select a smaller dimension; that
