@@ -1,0 +1,31 @@
+# Bryan approved these persistent host command prefixes for memory measurements.
+# macOS /usr/bin/time -l needs host access to read kern.clockrate.
+prefix_rule(
+    pattern = ["/usr/bin/time", "-l", "ffmpeg"],
+    decision = "allow",
+    justification = "Bryan approved persistent host FFmpeg memory measurements.",
+    match = [
+        "/usr/bin/time -l ffmpeg -version",
+        "/usr/bin/time -l ffmpeg -i input.mp4 -f null -",
+    ],
+    not_match = [
+        "ffmpeg -version",
+        "/usr/bin/time -l sh -c command",
+        "/usr/bin/time -l python benchmark.py",
+    ],
+)
+
+prefix_rule(
+    pattern = ["/usr/bin/time", "-l", "uv", "run", "blue-skies"],
+    decision = "allow",
+    justification = "Bryan approved persistent host Blue Skies memory measurements.",
+    match = [
+        "/usr/bin/time -l uv run blue-skies farcaster-gif --help",
+        "/usr/bin/time -l uv run blue-skies render --help",
+    ],
+    not_match = [
+        "/usr/bin/time -l uv run python benchmark.py",
+        "/usr/bin/time -l uv run another-project",
+        "uv run blue-skies --help",
+    ],
+)

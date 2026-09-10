@@ -1,0 +1,2 @@
+# Keep a project config layer so Codex loads the adjacent rules directory.
+# Memory measurement permissions are in rules/memory.rules.

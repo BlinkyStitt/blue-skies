@@ -10,7 +10,9 @@
 - Memory measurements are authorized for repository validation. On macOS, run
   `/usr/bin/time -l ffmpeg ...` or `/usr/bin/time -l uv run blue-skies ...` with
   host access. The sandbox blocks the `kern.clockrate` query needed by `time`.
-  Request host execution through the tool's normal approval mechanism. Use
-  temporary output paths, preserve source files and masters, and wait for the
-  command to finish.
+  Bryan approved persistent host execution for these two command prefixes in
+  `.codex/rules/memory.rules`. Run each measured command directly so the rule can
+  match it. Codex loads the rules at startup for this trusted repository; restart
+  Codex after changing them. Use temporary output paths, preserve source files and
+  masters, and wait for the command to finish.
   Report peak resident memory in bytes with the input duration and dimensions.
