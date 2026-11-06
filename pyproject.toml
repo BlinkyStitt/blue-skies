@@ -35,3 +35,6 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ty.environment]
 python-version = "3.12"
+
+[tool.uv]
+exclude-newer = "7 days"
