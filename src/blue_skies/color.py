@@ -82,7 +82,7 @@ def oklab_to_linear_rgb(image: FloatImage) -> FloatImage:
     return result
 
 
-def smootherstep(value: float | FloatImage) -> float | FloatImage:
+def smootherstep(value: float | FloatImage | NDArray[np.float64]) -> float | FloatImage:
     """Fifth-order easing with zero first and second derivatives at both ends."""
     clipped = np.clip(value, 0.0, 1.0)
     result = clipped * clipped * clipped * (clipped * (clipped * 6.0 - 15.0) + 10.0)
