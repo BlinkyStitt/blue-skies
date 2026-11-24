@@ -23,6 +23,27 @@ final validation. Repository agents must also follow `AGENTS.md`.
 - `uv`
 - `ffmpeg` and `ffprobe`
 
+## Optional error reporting
+
+Blue Skies does not send telemetry unless `BLUE_SKIES_SENTRY_DSN` is set to an
+HTTPS DSN. On macOS and Linux, reporting also requires `curl`. The SDK sends
+unhandled CLI exceptions and error-level Python logs. It excludes exception/log
+messages, source paths, photo contents and metadata, command arguments, local
+variables, user/host details, attachments and breadcrumbs. It sends exception
+classes and code module/function/line locations only. Tracing, profiling and
+session reporting are not enabled.
+
+Set `SENTRY_RELEASE` to the exact full Git commit for an installed wheel. A tracked source
+checkout derives this revision from Git when the variable is absent. Untracked
+source archives require an explicit revision. Reporting
+rejects an invalid revision; it never substitutes `dev`. The release is
+`blue-skies@<full commit>`. Keep the DSN in your launch environment, outside Git.
+
+Uploads use the native SDK queue and rate limits with verified TLS, no redirects
+or retries, a two-second absolute HTTP deadline, and a two-second shutdown flush.
+The collector's response body is never stored or sent to another destination.
+Reporting preserves the command's failure status and normal local traceback.
+
 ## Reproduce
 
 ```bash

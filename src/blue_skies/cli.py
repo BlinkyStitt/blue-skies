@@ -10,6 +10,7 @@ from .media import load_sources, write_contact_sheet
 from .ordering import build_tour, cycle_length, pairwise_distances
 from .render import RenderSettings, render_video, write_order_manifest
 from .social_gif import SocialGifSettings, make_social_gif
+from .telemetry import initialize
 
 
 def _make_gif(source: Path, destination: Path) -> None:
@@ -100,6 +101,7 @@ def farcaster_gif(arguments: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    initialize()
     parser = argparse.ArgumentParser(description="Render smooth sky-photo transitions")
     subparsers = parser.add_subparsers(dest="command", required=True)
     render_parser = subparsers.add_parser("render")
