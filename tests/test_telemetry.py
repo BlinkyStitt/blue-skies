@@ -18,6 +18,7 @@ import pytest
 import sentry_sdk
 from sentry_sdk.consts import EndpointType
 
+from blue_skies import telemetry
 from blue_skies.telemetry import BoundedTransport, initialize
 
 
@@ -129,6 +130,89 @@ def test_release_must_be_full_hash(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SENTRY_RELEASE", "dev")
     with pytest.raises(ValueError, match="full Git commit hash"):
         initialize()
+
+
+def commit_source(root: Path) -> str:
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "-c",
+            "user.name=Offline Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "Fixture",
+        ],
+        check=True,
+    )
+    return subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
+
+
+def source_files(root: Path) -> Path:
+    module = root / "src" / "blue_skies" / "telemetry.py"
+    module.parent.mkdir(parents=True)
+    module.touch()
+    (root / "pyproject.toml").write_text('[project]\nname = "blue-skies"\n')
+    return module
+
+
+def test_installed_wheel_rejects_unrelated_checkout_without_running_git(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    commit_source(tmp_path)
+    module = (
+        tmp_path / ".venv" / "lib" / "python3.12" / "site-packages" / "blue_skies" / "telemetry.py"
+    )
+    module.parent.mkdir(parents=True)
+    module.touch()
+    monkeypatch.setattr(telemetry, "__file__", str(module))
+    monkeypatch.setenv("BLUE_SKIES_SENTRY_DSN", "https://public@sentry.invalid/1")
+    monkeypatch.delenv("SENTRY_RELEASE", raising=False)
+    git = Mock(side_effect=AssertionError("Installed packages must not run Git"))
+    monkeypatch.setattr(telemetry.subprocess, "run", git)
+    client = Mock()
+    monkeypatch.setattr(telemetry.sentry_sdk, "init", client)
+    with pytest.raises(ValueError, match="explicit SENTRY_RELEASE"):
+        initialize()
+    git.assert_not_called()
+    client.assert_not_called()
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_tracked_source_checkout_uses_its_exact_commit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, nested: bool
+) -> None:
+    source = tmp_path / "packages" / "blue-skies" if nested else tmp_path
+    module = source_files(source)
+    revision = commit_source(tmp_path)
+    monkeypatch.setattr(telemetry, "__file__", str(module))
+    monkeypatch.setenv("BLUE_SKIES_SENTRY_DSN", "https://public@sentry.invalid/1")
+    monkeypatch.delenv("SENTRY_RELEASE", raising=False)
+    client = Mock()
+    monkeypatch.setattr(telemetry.sentry_sdk, "init", client)
+    initialize()
+    assert client.call_args.kwargs["release"] == f"blue-skies@{revision}"
+
+
+def test_untracked_source_archive_rejects_parent_checkout_revision(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    commit_source(tmp_path)
+    module = source_files(tmp_path / "untracked-source")
+    monkeypatch.setattr(telemetry, "__file__", str(module))
+    monkeypatch.setenv("BLUE_SKIES_SENTRY_DSN", "https://public@sentry.invalid/1")
+    monkeypatch.delenv("SENTRY_RELEASE", raising=False)
+    client = Mock()
+    monkeypatch.setattr(telemetry.sentry_sdk, "init", client)
+    with pytest.raises(ValueError, match="Source archives require an explicit"):
+        initialize()
+    client.assert_not_called()
 
 
 @pytest.mark.parametrize("status", [None, 200, 307, 500, "drip-headers", "drip-body"])

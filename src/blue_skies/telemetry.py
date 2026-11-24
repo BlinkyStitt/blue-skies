@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import subprocess
+import tomllib
 from collections.abc import Mapping
 from email.parser import BytesHeaderParser
 from pathlib import Path
@@ -121,7 +122,30 @@ def initialize() -> None:
         raise ValueError("BLUE_SKIES_SENTRY_DSN must use verified HTTPS")
     revision = os.environ.get("SENTRY_RELEASE")
     if not revision:
-        source = Path(__file__).resolve().parents[2]
+        module = Path(__file__).resolve()
+        source = module.parents[2]
+        if source / "src" / "blue_skies" / "telemetry.py" != module:
+            raise ValueError("Installed packages require an explicit SENTRY_RELEASE")
+        metadata = tomllib.loads((source / "pyproject.toml").read_text())
+        if metadata.get("project", {}).get("name") != "blue-skies":
+            raise ValueError("SENTRY_RELEASE requires a Blue Skies source checkout")
+        tracked = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(source),
+                "ls-files",
+                "--error-unmatch",
+                "--",
+                "pyproject.toml",
+                "src/blue_skies/telemetry.py",
+            ],
+            capture_output=True,
+            timeout=1,
+            check=False,
+        )
+        if tracked.returncode:
+            raise ValueError("Source archives require an explicit SENTRY_RELEASE")
         result = subprocess.run(
             ["git", "-C", str(source), "rev-parse", "HEAD"],
             capture_output=True,

@@ -33,8 +33,9 @@ variables, user/host details, attachments and breadcrumbs. It sends exception
 classes and code module/function/line locations only. Tracing, profiling and
 session reporting are not enabled.
 
-Set `SENTRY_RELEASE` to the exact full Git commit for an installed wheel. A source
-checkout derives this revision from Git when the variable is absent. Reporting
+Set `SENTRY_RELEASE` to the exact full Git commit for an installed wheel. A tracked source
+checkout derives this revision from Git when the variable is absent. Untracked
+source archives require an explicit revision. Reporting
 rejects an invalid revision; it never substitutes `dev`. The release is
 `blue-skies@<full commit>`. Keep the DSN in your launch environment, outside Git.
 
