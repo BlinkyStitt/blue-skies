@@ -23,16 +23,23 @@ jobs:
   validate:
     name: Lint, types and tests
     runs-on: ski-kvm-blue-skies
-    timeout-minutes: 15
+    timeout-minutes: 20
+    container:
+      image: ubuntu:24.04@sha256:224a1869083a311ef3f13648a154ba79832fbef6364d31493642ca03082da254
+    defaults:
+      run:
+        shell: bash
     steps:
+      - name: Install FFmpeg and checkout tools
+        run: |
+          apt-get update
+          apt-get install --no-install-recommends -y ca-certificates curl ffmpeg git
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           version: '0.13.4'
           python-version: '3.12'
           enable-cache: true
-      - name: Install FFmpeg
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y ffmpeg
       - name: Install locked dependencies
         run: uv sync --locked --all-groups
       - run: uv run --locked ruff format --check .
