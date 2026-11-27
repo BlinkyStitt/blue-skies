@@ -26,7 +26,7 @@ jobs:
       run: python3 .github/scripts/ci_changes.py
   validate:
     name: Lint, types and tests
-    runs-on: ubuntu-24.04
+    runs-on: ski-kvm-blue-skies
     timeout-minutes: 20
     container:
       image: ubuntu:24.04@sha256:224a1869083a311ef3f13648a154ba79832fbef6364d31493642ca03082da254
